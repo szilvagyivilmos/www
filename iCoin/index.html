@@ -14,25 +14,38 @@
     This is a placeholder for base href that will be replaced by the value of
     the `--base-href` argument provided to `flutter build`.
   -->
-  <base href="/">
+  <script>
+    // Dynamically set base href to support both local dev and GitHub pages
+    // without hardcoding the repository name.
+    const basePath = location.pathname.substring(0, location.pathname.lastIndexOf('/') + 1);
+    document.write('<base href="' + basePath + '">');
+  </script>
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="iCoin - Local-first sovereign coin wallet.">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="icoin">
+  <meta name="apple-mobile-web-app-title" content="iCoin">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>icoin</title>
+  <title>iCoin - Sovereign Wallet</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    body {
+      background-color: #0A0D0E;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+  </style>
 </head>
-<body>
+<body style="background-color: #0A0D0E;">
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
