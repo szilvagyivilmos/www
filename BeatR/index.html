@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <link rel="shortcut icon" type="image/x-icon" href="favicon.ico">
+  <title>BeatR</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tilt+Neon&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/aubiojs@0.1.1/build/aubio.min.js"></script>
+  <style>
+    html,
+    body {
+      overflow-x: hidden;
+      width: 100%;
+    }
+
+    body {
+      font-family: 'Tilt Neon', sans-serif;
+      transition: background 0.4s ease, color 0.4s ease;
+    }
+
+    #app {
+      position: relative;
+      isolation: isolate;
+      overflow: visible;
+    }
+
+    #app::before,
+    #app::after {
+      content: '';
+      position: absolute;
+      pointer-events: none;
+      z-index: 0;
+      transition: opacity 0.08s ease, filter 0.08s ease, transform 0.08s ease;
+    }
+
+    #app::before {
+      inset: -2px;
+      border: 2px solid var(--theme-accent);
+      border-radius: inherit;
+      box-shadow: 0 0 18px 3px var(--theme-accent), 0 0 42px 8px var(--theme-accent);
+      opacity: 0.22;
+    }
+
+    #app::after {
+      top: 6%;
+      bottom: 6%;
+      left: -48px;
+      right: -48px;
+      background: linear-gradient(to right, var(--theme-accent) 0%, transparent 18%, transparent 82%, var(--theme-accent) 100%);
+      filter: blur(26px);
+      opacity: 0.1;
+      transform: scaleY(0.94);
+    }
+
+    #app.app-beat-active::before {
+      inset: -12px;
+      box-shadow: 0 0 24px 5px var(--theme-accent), 0 0 62px 14px var(--theme-accent), 0 0 120px 24px var(--theme-accent);
+      opacity: 1;
+      filter: brightness(1.5);
+    }
+
+    #app.app-beat-active::after {
+      top: 2%;
+      bottom: 2%;
+      left: -68px;
+      right: -68px;
+      opacity: 0.58;
+      filter: blur(38px) brightness(1.5);
+      transform: scaleY(1.04);
+    }
+
+    #app>* {
+      position: relative;
+      z-index: 1;
+    }
+
+    @keyframes music-beat {
+      0% {
+        filter: brightness(1.3);
+        transform: scale(1.05);
+      }
+
+      100% {
+        filter: brightness(0.4);
+        transform: scale(1);
+      }
+    }
+
+    .neon-glow-text {
+      text-shadow: 0 0 8px var(--theme-accent), 0 0 18px var(--theme-accent);
+    }
+
+    .neon-glow-div {
+      text-shadow: 0 0 8px var(--theme-accent), 0 0 18px var(--theme-accent);
+    }
+
+
+
+    input[type="range"].theme-slider {
+      accent-color: var(--theme-accent, #6366f1);
+    }
+
+    input[type="range"].hue-slider::-webkit-slider-thumb {
+      appearance: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 3px solid var(--theme-accent, #333);
+      cursor: pointer;
+      margin-top: -6px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+    }
+
+    input[type="range"].hue-slider::-moz-range-thumb {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 3px solid var(--theme-accent, #333);
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+    }
+
+    input[type="range"].hue-slider::-webkit-slider-runnable-track {
+      height: 12px;
+      border-radius: 6px;
+    }
+
+    input[type="range"].hue-slider::-moz-range-track {
+      height: 12px;
+      border-radius: 6px;
+    }
+
+    .theme-file-input::file-selector-button,
+    .theme-file-input::-webkit-file-upload-button {
+      background: var(--theme-btn, #4f46e5);
+      color: #ffffff;
+      border: 0;
+      border-radius: 0.5rem;
+      padding: 0.375rem 0.75rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease-in-out;
+      margin-right: 0.75rem;
+    }
+
+    .theme-file-input::file-selector-button:hover,
+    .theme-file-input::-webkit-file-upload-button:hover {
+      background: var(--theme-btn-hover, #4338ca);
+      filter: brightness(1.1);
+    }
+  </style>
+</head>
+
+<body class="text-slate-100 min-h-screen flex items-center justify-center p-3.5 sm:p-6 overflow-x-hidden">
+
+  <div id="app" class="w-full max-w-xl rounded-xl sm:rounded-2xl p-3 sm:p-6 border drop-shadow-(--my-drop-shadow) space-y-4 sm:space-y-5 transition-all" :class="isBeatActive ? 'scale-[1.02] app-beat-active' : 'scale-100'" :style="{ transitionDuration: isBeatActive ? '50ms' : '400ms', backgroundColor: isBeatActive ? 'var(--theme-beat-bg)' : 'var(--theme-card-bg)', borderColor: isBeatActive ? 'var(--theme-card-border-beat)' : 'var(--theme-card-border)', boxShadow: isBeatActive ? 'var(--theme-beat-shadow)' : 'var(--theme-card-shadow)' }">
+    <header class="text-center space-y-1">
+      <h1 class="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xl font-bold border transition-all tracking-wide" :class="isBeatActive ? 'scale-[1.08]' : 'scale-100'" :style="{
+          transitionDuration: isBeatActive ? '50ms' : '400ms',
+          color: isBeatActive ? '#ffffff' : 'var(--theme-title-text)',
+          backgroundColor: isBeatActive ? 'var(--theme-title-bg-beat)' : 'var(--theme-title-bg)',
+          borderColor: isBeatActive ? 'var(--theme-title-border-beat)' : 'var(--theme-title-border)',
+          boxShadow: isBeatActive ? 'var(--theme-title-glow-beat)' : 'var(--theme-title-glow)',
+          textShadow: isBeatActive ? '0 0 15px var(--theme-accent), 0 0 35px var(--theme-accent), 0 0 50px #ffffff' : '0 0 10px var(--theme-accent), 0 0 22px var(--theme-accent)'
+        }">
+        BeatR
+      </h1>
+    </header>
+
+    <!-- File Upload -->
+    <div class="flex items-center gap-4 p-0.5 rounded-xl border transition-colors duration-300 bg-slate-900/60 border-[var(--theme-card-border)]">
+      <!-- Neon Disc / Demo Beat Vinyl -->
+      <div class="flex-shrink-0 flex items-center justify-center">
+        <svg viewBox="0 0 100 100" @click="onDiscClick" class="w-20 h-20 sm:w-24 sm:h-24 transition-all duration-300 cursor-pointer overflow-visible hover:scale-105 active:scale-95" :class="(isPlaying || analyzing) ? 'animate-[spin_4s_linear_infinite]' : ''" :title="isDemoActive && isPlaying ? 'Pause Demo Beat' : 'Play Demo Beat (116 BPM)'">
+          <defs>
+            <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="2" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <!-- Circle path for text following the center paper label edge -->
+            <path id="demo-beat-circle" d="M 50,50 m -15,0 a 15,15 0 1,1 30,0 a 15,15 0 1,1 -30,0" />
+          </defs>
+          <g filter="url(#neon-glow)" fill="none" stroke-linecap="round" stroke-linejoin="round" style="transform-origin: center;" :style="{
+               animation: (isPlaying && discFlashing) ? `music-beat ${60000 / baseBpm}ms ease-out infinite` : 'none'
+             }">
+            <!-- Diagonal tertiary line -->
+            <line x1="18" y1="82" x2="36" y2="64" stroke="var(--theme-tertiary)" stroke-width="1.5" />
+            <line x1="64" y1="36" x2="82" y2="18" stroke="var(--theme-tertiary)" stroke-width="1.5" />
+
+            <!-- Primary outer arcs & groove -->
+            <path d="M 6 50 L 24 50 A 26 26 0 0 1 50 24 L 50 6" stroke="var(--theme-accent)" stroke-width="1.5" />
+            <path d="M 94 50 L 76 50 A 26 26 0 0 1 50 76 L 50 94" stroke="var(--theme-secondary)" stroke-width="1.5" />
+
+            <!-- Dashed arcs -->
+            <path d="M 12 50 A 38 38 0 0 1 50 12" stroke="var(--theme-accent)" stroke-width="1.5" stroke-dasharray="6 4" />
+            <path d="M 88 50 A 38 38 0 0 1 50 88" stroke="var(--theme-secondary)" stroke-width="1.5" stroke-dasharray="6 4" />
+            <path d="M 19 76 A 38 38 0 0 0 44 87" stroke="var(--theme-tertiary)" stroke-width="1.5" stroke-dasharray="3 3" />
+            <path d="M 26 70 A 32 32 0 0 0 42 79" stroke="var(--theme-accent)" stroke-width="1.5" stroke-dasharray="2 3" />
+
+            <!-- Outer Vinyl Groove -->
+            <circle cx="50" cy="50" r="44" stroke="var(--theme-secondary)" stroke-width="3" />
+
+            <!-- Center Paper Label & Circular Text -->
+            <circle cx="50" cy="50" r="20" fill="#0f172a" stroke="var(--theme-accent)" stroke-width="1.5" />
+            <text font-size="3.8" font-weight="900" letter-spacing="1.2" fill="var(--theme-accent)" class="font-mono uppercase select-none pointer-events-none">
+              <textPath href="#demo-beat-circle" xlink:href="#demo-beat-circle" startOffset="50%" text-anchor="middle">
+                • DEMO BEAT • DEMO BEAT •
+              </textPath>
+            </text>
+            <circle cx="50" cy="50" r="3.5" fill="#020617" stroke="var(--theme-accent)" stroke-width="1.2" />
+          </g>
+        </svg>
+      </div>
+      <!-- Input Controls -->
+      <div class="flex-1 min-w-0 flex flex-col items-center justify-center text-center">
+        <label class="block text-xs font-semibold uppercase tracking-wider mb-2 pt-1 pb-3 text-center">Select Your Music or Click the Vinyl for Demo</label>
+        <div class="flex items-center justify-center w-full">
+          <input type="file" accept="audio/*" @change="handleFileUpload" :disabled="analyzing" class="theme-file-input block text-sm text-slate-400 cursor-pointer disabled:opacity-50 mx-auto" />
+        </div>
+      </div>
+    </div>
+    <div v-if="analyzing" class="space-y-2 p-4 rounded-xl border transition-colors duration-300 bg-slate-900/75 border-[var(--theme-card-border)]">
+      <div v-if="analyzing" class=" text-center text-xl p-9 font-medium animate-pulse transition-colors text-[var(--theme-accent)]">
+        Listening to the BEAT...
+      </div>
+    </div>
+
+    <div class="space-y-2 bg-slate-950/60 px-3 py-3 rounded-lg border transition-colors duration-300 border-[var(--theme-card-border)]">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-[10px] uppercase font-bold tracking-wider text-slate-400">Neon Time</span>
+        <span class="text-[10px] font-mono font-bold text-[var(--theme-accent)]">{{ selectedHue }}°</span>
+      </div>
+      <input type="range" min="0" max="360" v-model.number="selectedHue" @input="onHueChange" class="hue-slider w-full cursor-pointer appearance-none bg-transparent h-3" style="background: linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%); border-radius: 6px;" />
+    </div>
+
+    <!-- Timeline & Playback -->
+    <div v-if="audioLoaded" class="p-3.5 rounded-xl border transition-colors duration-300 bg-slate-900/75 border-[var(--theme-card-border)]">
+      <div class="flex items-center gap-4">
+        <!-- Play/Pause Button -->
+        <button @click="togglePlay" class="flex-shrink-0 w-12 h-12 flex items-center justify-center rounded-full transition-all text-white shadow-md hover:scale-105" :class="isPlaying ? 'bg-slate-700 hover:bg-slate-600' : 'bg-[var(--theme-btn)] hover:bg-[var(--theme-btn-hover)]'" :style="!isPlaying ? 'box-shadow: var(--theme-btn-glow)' : ''">
+          <svg v-if="!isPlaying" xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 ml-1" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+          <svg v-else xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+          </svg>
+        </button>
+        <!-- Timeline -->
+        <div class="flex-1 min-w-0 flex flex-col justify-center">
+          <div class="flex items-center justify-between text-xs text-slate-400 font-mono mb-2">
+            <span>{{ formatTime(currentTime) }}</span>
+            <span>{{ formatTime(duration) }}</span>
+          </div>
+          <input type="range" min="0" :max="duration || 100" step="0.1" v-model.number="currentTime" @input="onSeek" class="theme-slider w-full cursor-pointer h-1.5 bg-slate-800 rounded-lg" />
+        </div>
+      </div>
+    </div>
+
+    <!-- BPM Readings -->
+    <div class="grid grid-cols-2 gap-3">
+      <div class="p-3 rounded-xl border text-center transition-colors duration-300 bg-slate-900/75 border-[var(--theme-card-border)]">
+        <span class="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">Base Track BPM</span>
+        <div class="flex items-center justify-center gap-1 mt-1">
+          <input type="number" v-model.number="baseBpm" @input="updatePlaybackRate" class="w-16 text-xl font-black bg-transparent text-center border-b focus:outline-none transition-colors border-[var(--theme-accent)] text-[var(--theme-accent)] [color-scheme:dark]" style="text-shadow: 0 0 12px var(--theme-accent), 0 0 24px var(--theme-accent)" />
+        </div>
+
+        <div class="flex items-center justify-center gap-2 mt-3">
+          <button @click="toggleMic" class="flex-1 py-2 px-1 rounded-lg text-[10px] sm:text-xs font-bold transition text-white shadow-[var(--theme-btn-glow)] truncate" :class="isListening ? 'bg-gray-800' : 'bg-[var(--theme-btn)] hover:bg-[var(--theme-btn-hover)]'">
+            {{ isListening ? 'Stop Mic' : 'Start Mic' }}
+          </button>
+          <button @click="resetToOriginal" class="flex-1 py-2 px-1 bg-slate-800 hover:bg-slate-700 border rounded-lg text-[10px] sm:text-xs font-bold text-slate-300 transition border-[var(--theme-card-border)] truncate">
+            Reset BPM
+          </button>
+        </div>
+
+      </div>
+
+      <div class="p-3 rounded-xl border text-center transition-colors duration-300 bg-slate-900/75 border-[var(--theme-card-border)]">
+        <span class="text-[10px] uppercase font-bold tracking-wider text-slate-400 flex items-center justify-center gap-1.5">
+          Active Target BPM
+          <div class="w-2 h-2 rounded-full transition-all duration-75" :style="{ backgroundColor: isBeatActive ? 'var(--theme-accent)' : 'transparent', boxShadow: isBeatActive ? '0 0 10px 2px var(--theme-accent)' : 'none', border: '1px solid var(--theme-accent)' }"></div>
+        </span>
+        <div class="text-xl font-black mt-1 font-mono transition-colors text-[var(--theme-accent)]" style="text-shadow: 0 0 12px var(--theme-accent), 0 0 24px var(--theme-accent)">{{ targetBpm
+          }}</div>
+        <div class="flex justify-center gap-1.5 mt-2">
+          <button @click="halveBpm" class="text-[10px] px-2.5 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-200 font-mono transition border border-[var(--theme-card-border)]">/2</button>
+          <button @click="doubleBpm" class="text-[10px] px-2.5 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-200 font-mono transition border border-[var(--theme-card-border)]">x2</button>
+        </div>
+        <span class="text-[10px] text-slate-400 mt-2 block font-mono">Rate: {{ playbackRate.toFixed(2)
+          }}x</span>
+      </div>
+    </div>
+
+    <!-- Microphone & Spectrum Analyzer -->
+    <div class="p-4 rounded-xl border space-y-4 transition-colors duration-300 bg-slate-900/50 border-[var(--theme-card-border)]">
+      <!-- Header -->
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-sm font-semibold text-slate-200">Noise Inspector</h3>
+          <p class="text-[11px] text-slate-400">Watch the noise and see the beat in the frequency window.
+          </p>
+        </div>
+      </div>
+
+
+
+      <!-- Real-time FFT Visualizer -->
+      <div class="space-y-1">
+        <div class="relative w-full h-32 bg-slate-950 rounded-lg overflow-hidden border transition-colors duration-300 shadow-inner border-[var(--theme-card-border)]">
+          <canvas ref="canvasEl" class="w-full h-full block"></canvas>
+          <button v-if="!isListening" @click="toggleMic" class="absolute inset-0 flex items-center justify-center bg-slate-950/75 hover:bg-slate-950/65 transition-colors text-xs text-slate-300 hover:text-white font-mono gap-1.5">
+            <svg class="w-15 h-15 text-[var(--theme-accent)]" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
+            </svg>
+            Press Here to Start Microphone
+          </button>
+        </div>
+        <!-- Frequency Scale Axis Labels (0 Hz - 15 kHz) -->
+        <div class="flex justify-between text-[9px] font-mono text-slate-500 px-1">
+          <span>20 Hz</span>
+          <span>3 kHz</span>
+          <span>6 kHz</span>
+          <span>9 kHz</span>
+          <span>12 kHz</span>
+          <span>15 kHz</span>
+        </div>
+      </div>
+      <!-- Loudness Sensitivity -->
+      <div class="space-y-2 text-xs bg-slate-950/60 p-3 rounded-lg border transition-colors duration-300 border-[var(--theme-card-border)]">
+        <div class="flex justify-between items-center text-slate-300 font-medium">
+          <span>Not Loud Enough? <span class="font-mono transition-colors text-[var(--theme-accent)]">{{
+              triggerThreshold }}%</span></span>
+          <span class="text-[10px] px-2 py-0.5 rounded font-mono font-bold transition-all" :class="hitQuality.color">
+            {{ hitQuality.text }}
+          </span>
+        </div>
+        <div class="relative w-full bg-slate-800 h-3 rounded-full overflow-hidden border border-slate-700">
+          <div class="h-full transition-all duration-75 bg-[var(--theme-accent)]" :style="{ width: `${Math.min(inBandEnergy, 100)}%` }"></div>
+          <div class="absolute top-0 bottom-0 w-1 z-10 bg-[var(--theme-btn)]" :style="{ left: `${triggerThreshold}%` }">
+          </div>
+        </div>
+        <input type="range" min="5" max="95" step="1" v-model.number="triggerThreshold" @input="onThresholdManualChange" class="theme-slider w-full cursor-pointer h-1 bg-slate-800 rounded-lg" />
+        <p class="text-[11px] text-slate-400">Set the microphone sensitivity to catch the beat.</br> Move the slider just above the noise level!</p>
+
+        <!-- Threshold Change Notification / Advisory Banner -->
+        <div v-if="thresholdNotice" class="p-2.5 rounded-lg border text-[11px] flex items-center justify-between gap-2.5 transition-all duration-300" :class="thresholdNotice.boxClass">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="text-sm shrink-0">{{ thresholdNotice.icon }}</span>
+            <span class="leading-snug" :class="thresholdNotice.textClass">{{ thresholdNotice.message }}</span>
+          </div>
+          <button v-if="thresholdNotice.suggestedVal" @click="applySuggestedThreshold(thresholdNotice.suggestedVal)" class="shrink-0 px-2.5 py-1 rounded text-[10px] font-bold transition-all cursor-pointer shadow-sm hover:brightness-110 active:scale-95" :class="thresholdNotice.btnClass">
+            Set {{ thresholdNotice.suggestedVal }}%
+          </button>
+        </div>
+      </div>
+
+      <!-- Frequency Range Selector -->
+      <div class="space-y-1.5 text-xs bg-slate-950/60 p-3 rounded-lg border transition-colors duration-300 border-[var(--theme-card-border)]">
+        <div class="flex justify-between text-slate-300 font-medium">
+          <span>Frequency Window:</span>
+          <span class="font-mono font-semibold transition-colors text-[var(--theme-accent)]">{{ minFreq }} Hz
+            – {{ maxFreq }} Hz</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 pt-1">
+          <div>
+            <div class="flex justify-between text-[10px] text-slate-500 mb-0.5">
+              <span>Low Cut:</span>
+              <span>{{ minFreq }} Hz</span>
+            </div>
+            <input type="range" min="20" max="10000" step="10" v-model.number="minFreq" @input="onFreqRangeChange" class="theme-slider w-full cursor-pointer h-1 bg-slate-800 rounded-lg" />
+          </div>
+          <div>
+            <div class="flex justify-between text-[10px] text-slate-500 mb-0.5">
+              <span>High Cut:</span>
+              <span>{{ maxFreq }} Hz</span>
+            </div>
+            <input type="range" min="200" max="15000" step="50" v-model.number="maxFreq" @input="onFreqRangeChange" class="theme-slider w-full cursor-pointer h-1 bg-slate-800 rounded-lg" />
+          </div>
+        </div>
+        <p class="text-[11px] text-slate-400">Use the Sliders to select the range of the beat. </br>(the peaks in the diagram should be in the highlighted aera)</p>
+      </div>
+
+
+
+      <!-- Speed Lockout Range -->
+      <div class="space-y-1.5 text-xs bg-slate-950/60 p-3 rounded-lg border transition-colors duration-300 border-[var(--theme-card-border)]">
+        <div class="flex justify-between text-slate-300 font-medium">
+          <span>Beat Rage:</span>
+          <span class="font-mono font-semibold transition-colors text-[var(--theme-accent)]">{{ minBpmLock }}
+            – {{ maxBpmLock }} BPM</span>
+        </div>
+        <div class="grid grid-cols-2 gap-3 pt-1">
+          <div>
+            <div class="flex justify-between text-[10px] text-slate-500 mb-0.5">
+              <span>Min Tempo:</span>
+              <span>{{ minBpmLock }} BPM</span>
+            </div>
+            <input type="range" min="40" max="120" step="5" v-model.number="minBpmLock" class="theme-slider w-full cursor-pointer h-1 bg-slate-800 rounded-lg" />
+          </div>
+          <div>
+            <div class="flex justify-between text-[10px] text-slate-500 mb-0.5">
+              <span>Max Tempo:</span>
+              <span>{{ maxBpmLock }} BPM</span>
+            </div>
+            <input type="range" min="140" max="320" step="5" v-model.number="maxBpmLock" class="theme-slider w-full cursor-pointer h-1 bg-slate-800 rounded-lg" />
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+
+    <!-- Hue Selector Bar -->
+
+  </div>
+
+  <script>
+    const { createApp, ref, computed, onMounted, watch } = Vue;
+
+    createApp({
+      setup() {
+        const audioLoaded = ref(false);
+        const analyzing = ref(false);
+        const isPlaying = ref(false);
+        const baseBpm = ref(120);
+        const targetBpm = ref(120);
+
+        // Timeline controls
+        const currentTime = ref(0);
+        const duration = ref(0);
+
+        // Canvas element ref
+        const canvasEl = ref(null);
+
+        // Mic & DSP Controls
+        const isListening = ref(false);
+        const isBeatActive = ref(false);
+        const inBandEnergy = ref(0);
+        const discFlashing = ref(true);
+
+        // Dynamic Hue Theme (Starts with a random neon hue on every page load)
+        const selectedHue = ref(Math.floor(Math.random() * 360));
+
+        const currentColorStyle = computed(() => {
+          const h = selectedHue.value;
+          return {
+            accentColor: `hsl(${h}, 100%, 65%)`,
+            secondaryColor: `hsl(${(h + 120) % 360}, 100%, 65%)`,
+            tertiaryColor: `hsl(${(h + 240) % 360}, 100%, 65%)`,
+            btnPrimary: `hsl(${h}, 95%, 48%)`,
+            btnHover: `hsl(${h}, 100%, 40%)`,
+            bodyBg: `radial-gradient(ellipse at 50% -10%, hsl(${h}, 80%, 16%) 0%, #030712 55%, #000000 100%)`,
+            cardBg: `hsl(${h}, 35%, 6%)`,
+            beatBg: `hsl(${h}, 45%, 15%)`,
+            cardBorder: `hsla(${h}, 100%, 55%, 0.5)`,
+            cardBorderBeat: `hsla(${h}, 100%, 85%, 1)`,
+            cardShadow: `0 0 15px hsla(${h}, 100%, 55%, 0.4), 0 0 45px hsla(${h}, 100%, 50%, 0.15), inset 0 0 12px hsla(${h}, 100%, 55%, 0.15)`,
+            beatShadow: `0 0 120px 30px hsla(${h}, 100%, 65%, 0.8), 0 0 40px 10px hsla(${h}, 100%, 50%, 0.9), inset 0 0 80px 20px hsla(${h}, 100%, 60%, 0.5), inset 0 0 20px 2px hsla(${h}, 100%, 80%, 0.8)`,
+            titleBg: `hsla(${h}, 90%, 14%, 0.85)`,
+            titleBgBeat: `hsla(${h}, 90%, 25%, 0.95)`,
+            titleText: `hsl(${h}, 100%, 82%)`,
+            titleBorder: `hsla(${h}, 100%, 65%, 0.75)`,
+            titleBorderBeat: `hsla(${h}, 100%, 85%, 1)`,
+            titleGlow: `0 0 15px hsla(${h}, 100%, 60%, 0.7), 0 0 35px hsla(${h}, 100%, 50%, 0.4), inset 0 0 10px hsla(${h}, 100%, 70%, 0.3)`,
+            titleGlowBeat: `0 0 25px hsla(${h}, 100%, 75%, 0.9), 0 0 50px hsla(${h}, 100%, 65%, 0.7), inset 0 0 20px hsla(${h}, 100%, 80%, 0.6)`,
+            btnGlow: `0 0 16px hsla(${h}, 100%, 55%, 0.55), 0 0 32px hsla(${h}, 100%, 50%, 0.25), inset 0 1px 1px hsla(${h}, 100%, 90%, 0.35)`,
+            bandBg: `hsla(${h}, 100%, 55%, 0.22)`,
+            bandBorder: `hsla(${h}, 100%, 65%, 0.85)`,
+            outOfBand: '#0b1329',
+            getBarFill: (ctx, x, y, width, height, barHeight, ratio, freqNorm) => {
+              const grad = ctx.createLinearGradient(0, height, 0, y);
+              grad.addColorStop(0, `hsl(${h}, 90%, 35%)`);
+              grad.addColorStop(0.5, `hsl(${h}, 100%, 60%)`);
+              grad.addColorStop(1, `#ffffff`);
+              return grad;
+            }
+          };
+        });
+
+        const applyThemeToDOM = () => {
+          const style = currentColorStyle.value;
+          const root = document.documentElement;
+          root.style.setProperty('--theme-accent', style.accentColor);
+          root.style.setProperty('--theme-secondary', style.secondaryColor);
+          root.style.setProperty('--theme-tertiary', style.tertiaryColor);
+          root.style.setProperty('--theme-btn', style.btnPrimary);
+          root.style.setProperty('--theme-btn-hover', style.btnHover);
+          root.style.setProperty('--theme-card-bg', style.cardBg);
+          root.style.setProperty('--theme-beat-bg', style.beatBg);
+          root.style.setProperty('--theme-card-border', style.cardBorder);
+          root.style.setProperty('--theme-card-border-beat', style.cardBorderBeat);
+          root.style.setProperty('--theme-card-shadow', style.cardShadow);
+          root.style.setProperty('--theme-beat-shadow', style.beatShadow);
+          root.style.setProperty('--theme-title-bg', style.titleBg);
+          root.style.setProperty('--theme-title-bg-beat', style.titleBgBeat);
+          root.style.setProperty('--theme-title-text', style.titleText);
+          root.style.setProperty('--theme-title-border', style.titleBorder);
+          root.style.setProperty('--theme-title-border-beat', style.titleBorderBeat);
+          root.style.setProperty('--theme-title-glow', style.titleGlow);
+          root.style.setProperty('--theme-title-glow-beat', style.titleGlowBeat);
+          root.style.setProperty('--theme-btn-glow', style.btnGlow);
+
+          if (document.body) {
+            document.body.style.background = style.bodyBg;
+          }
+        };
+
+        watch(selectedHue, () => {
+          applyThemeToDOM();
+          if (!isListening.value) {
+            drawIdleVisualizer();
+          }
+        });
+
+        const onHueChange = () => {
+          // handled by watch
+        };
+
+        const drawIdleVisualizer = () => {
+          if (!canvasEl.value || isListening.value) return;
+          const canvas = canvasEl.value;
+          const ctx = canvas.getContext('2d');
+          const width = canvas.width = canvas.offsetWidth || 500;
+          const height = canvas.height = canvas.offsetHeight || 128;
+
+          ctx.fillStyle = '#020617';
+          ctx.fillRect(0, 0, width, height);
+
+          const maxDisplayFreq = 15000;
+          const startX = (minFreq.value / maxDisplayFreq) * width;
+          const endX = (maxFreq.value / maxDisplayFreq) * width;
+
+          const currentStyle = currentColorStyle.value;
+
+          ctx.fillStyle = currentStyle.bandBg;
+          ctx.fillRect(startX, 0, endX - startX, height);
+          ctx.strokeStyle = currentStyle.bandBorder;
+          ctx.strokeRect(startX, 0, endX - startX, height);
+
+          const numBars = 56;
+          const barWidth = width / numBars;
+          for (let i = 0; i < numBars; i++) {
+            const freq = (i / numBars) * maxDisplayFreq;
+            const isInBand = freq >= minFreq.value && freq <= maxFreq.value;
+            const bell = Math.exp(-Math.pow((i - numBars * 0.35) / (numBars * 0.28), 2));
+            const restingVal = Math.max(0.04, bell * 0.35);
+            const barHeight = restingVal * height;
+            const x = i * barWidth;
+            const y = height - barHeight;
+
+            if (isInBand) {
+              const freqNorm = (freq - minFreq.value) / Math.max(1, (maxFreq.value - minFreq.value));
+              ctx.shadowColor = currentStyle.accentColor;
+              ctx.shadowBlur = 10;
+              ctx.fillStyle = currentStyle.getBarFill(ctx, x, y, barWidth, height, barHeight, restingVal, freqNorm);
+            } else {
+              ctx.shadowBlur = 0;
+              ctx.fillStyle = currentStyle.outOfBand;
+            }
+            ctx.fillRect(x, y, Math.max(1, barWidth - 1), barHeight);
+          }
+          ctx.shadowBlur = 0;
+        };
+
+        onMounted(() => {
+          applyThemeToDOM();
+          setTimeout(drawIdleVisualizer, 50);
+        });
+
+        // Filtering & Detection Range States
+        const minFreq = ref(80);
+        const maxFreq = ref(600);
+        const triggerThreshold = ref(45);
+        const minBpmLock = ref(60);
+        const maxBpmLock = ref(240);
+
+        const thresholdNotice = ref(null);
+        let thresholdLastAdjustTime = 0;
+
+        let noiseFloor = 10;
+        let highEnergyDurationMs = 0;
+        let lastFrameTime = 0;
+        let recentNearMisses = [];
+        let recentBeats = [];
+        let continuousHitCount = 0;
+        let isRising = false;
+        let peakCandidate = 0;
+        let prevEnergy = 0;
+        let lastEvalTime = 0;
+
+        const onThresholdManualChange = () => {
+          thresholdLastAdjustTime = performance.now();
+          thresholdNotice.value = null;
+        };
+
+        const applySuggestedThreshold = (val) => {
+          triggerThreshold.value = Math.max(5, Math.min(80, Math.round(val)));
+          thresholdLastAdjustTime = performance.now();
+          thresholdNotice.value = null;
+        };
+
+        const audioEl = new Audio();
+        audioEl.preservesPitch = true;
+
+        let micStream = null;
+        let micAudioCtx = null;
+        let micAnalyser = null;
+        let animFrame = null;
+        let lastBeatTime = 0;
+        const tapTimestamps = [];
+        const lastHitRatio = ref(0);
+
+        const playbackRate = computed(() => {
+          if (!baseBpm.value || baseBpm.value <= 0) return 1;
+          return targetBpm.value / baseBpm.value;
+        });
+
+        const hitQuality = computed(() => {
+          if (!isListening.value) return { text: 'IDLE', color: 'bg-slate-700 text-slate-400' };
+          if (thresholdNotice.value?.type === 'too_low') return { text: 'NOISE TOO HIGH', color: 'bg-amber-600 text-white' };
+          if (thresholdNotice.value?.type === 'too_high') return { text: 'PEAK TOO LOW', color: 'bg-sky-600 text-white' };
+          if (lastHitRatio.value === 0) return { text: 'WAITING', color: 'bg-slate-800 text-slate-400' };
+          if (lastHitRatio.value > 1.8) return { text: 'GREAT HIT', color: 'bg-emerald-500 text-white' };
+          if (lastHitRatio.value >= 1.0) return { text: 'GOOD HIT', color: 'bg-indigo-500 text-white' };
+          return { text: 'LOW SIGNAL', color: 'bg-amber-600 text-white' };
+        });
+
+        const updatePlaybackRate = () => {
+          audioEl.preservesPitch = true;
+          audioEl.playbackRate = playbackRate.value;
+        };
+
+        const halveBpm = () => {
+          targetBpm.value = Math.round(targetBpm.value / 2);
+          updatePlaybackRate();
+        };
+
+        const doubleBpm = () => {
+          targetBpm.value = Math.round(targetBpm.value * 2);
+          updatePlaybackRate();
+        };
+
+        const resetToOriginal = () => {
+          targetBpm.value = baseBpm.value;
+          updatePlaybackRate();
+        };
+
+        const onFreqRangeChange = () => {
+          if (minFreq.value >= maxFreq.value) {
+            minFreq.value = maxFreq.value - 50;
+          }
+          if (!isListening.value) {
+            drawIdleVisualizer();
+          }
+        };
+
+        const isDemoActive = ref(false);
+
+        audioEl.ontimeupdate = () => { currentTime.value = audioEl.currentTime; };
+        audioEl.onloadedmetadata = () => { duration.value = audioEl.duration; };
+        audioEl.onended = () => {
+          if (!audioEl.loop) isPlaying.value = false;
+        };
+        const onSeek = () => { audioEl.currentTime = currentTime.value; };
+
+        const togglePlay = () => {
+          if (audioEl.paused) {
+            updatePlaybackRate();
+            audioEl.play();
+            isPlaying.value = true;
+          } else {
+            audioEl.pause();
+            isPlaying.value = false;
+          }
+        };
+
+        const toggleDemoTrack = async () => {
+          if (isDemoActive.value && audioLoaded.value) {
+            togglePlay();
+            return;
+          }
+
+          analyzing.value = true;
+          audioLoaded.value = false;
+          if (isPlaying.value) {
+            audioEl.pause();
+            isPlaying.value = false;
+          }
+
+          try {
+            audioEl.src = 'demo_beat.wav';
+            audioEl.loop = true;
+            isDemoActive.value = true;
+
+            // Exact pre-known BPM for the iconic Billie Jean beat
+            baseBpm.value = 116;
+            targetBpm.value = 116;
+
+            audioLoaded.value = true;
+            updatePlaybackRate();
+            await audioEl.play();
+            isPlaying.value = true;
+          } catch (err) {
+            console.error(err);
+            alert('Could not start demo track.');
+          } finally {
+            analyzing.value = false;
+          }
+        };
+
+        const onDiscClick = () => {
+          if (!audioLoaded.value || isDemoActive.value) {
+            toggleDemoTrack();
+          } else {
+            togglePlay();
+          }
+        };
+
+        const formatTime = (secs) => {
+          if (isNaN(secs)) return "0:00";
+          const m = Math.floor(secs / 60);
+          const s = Math.floor(secs % 60);
+          return `${m}:${s < 10 ? '0' : ''}${s}`;
+        };
+
+        const handleFileUpload = async (event) => {
+          const file = event.target.files[0];
+          if (!file) return;
+
+          isDemoActive.value = false;
+          audioEl.loop = false;
+          analyzing.value = true;
+          audioLoaded.value = false;
+          if (isPlaying.value) {
+            audioEl.pause();
+            isPlaying.value = false;
+          }
+
+          audioEl.src = URL.createObjectURL(file);
+
+          try {
+            const arrayBuffer = await file.arrayBuffer();
+            const decodeCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const audioBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
+
+            const detected = await detectBpmWithAubio(audioBuffer);
+            baseBpm.value = detected;
+            targetBpm.value = detected;
+
+            audioLoaded.value = true;
+            updatePlaybackRate();
+          } catch (err) {
+            console.error(err);
+            alert('Could not decode file or detect BPM.');
+          } finally {
+            analyzing.value = false;
+          }
+        };
+
+        async function detectBpmWithAubio(audioBuffer) {
+          const aubio = await window.aubio();
+          const tempo = new aubio.Tempo(1024, 512, audioBuffer.sampleRate);
+          const channelData = audioBuffer.getChannelData(0);
+          const bpmReadings = [];
+
+          for (let i = 0; i < channelData.length - 512; i += 512) {
+            const chunk = channelData.subarray(i, i + 512);
+            if (tempo.do(chunk)) {
+              const b = tempo.getBpm();
+              if (b >= 50 && b <= 210) bpmReadings.push(b);
+            }
+          }
+
+          if (!bpmReadings.length) return 120;
+          const valid = bpmReadings.slice(Math.floor(bpmReadings.length * 0.15));
+          valid.sort((a, b) => a - b);
+          return Math.round(valid[Math.floor(valid.length / 2)]);
+        }
+
+        const toggleMic = async () => {
+          if (isListening.value) {
+            stopMic();
+          } else {
+            await startMic();
+          }
+        };
+
+        const startMic = async () => {
+          try {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+              throw new Error("Microphone API not available. On mobile, you must use HTTPS (secure context) or localhost to access the microphone.");
+            }
+
+            try {
+              micStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                  echoCancellation: false,
+                  noiseSuppression: false,
+                  autoGainControl: false
+                }
+              });
+            } catch (e) {
+              console.warn("Advanced audio constraints failed, trying basic audio...", e);
+              micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            }
+
+            micAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const source = micAudioCtx.createMediaStreamSource(micStream);
+
+            micAnalyser = micAudioCtx.createAnalyser();
+            micAnalyser.fftSize = 2048;
+            micAnalyser.smoothingTimeConstant = 0.4;
+
+            source.connect(micAnalyser);
+
+            triggerThreshold.value = 45;
+            isListening.value = true;
+            renderVisualizer();
+          } catch (err) {
+            console.error(err);
+            alert(`Microphone Error: ${err.message || err.name || "Permission denied or not supported."}`);
+          }
+        };
+
+        const stopMic = () => {
+          if (animFrame) cancelAnimationFrame(animFrame);
+          if (micStream) micStream.getTracks().forEach(t => t.stop());
+          if (micAudioCtx) micAudioCtx.close();
+          isListening.value = false;
+          inBandEnergy.value = 0;
+          tapTimestamps.length = 0;
+          lastHitRatio.value = 0;
+          thresholdNotice.value = null;
+          noiseFloor = 10;
+          highEnergyDurationMs = 0;
+          recentNearMisses = [];
+          recentBeats = [];
+          continuousHitCount = 0;
+          isRising = false;
+          peakCandidate = 0;
+          prevEnergy = 0;
+          lastFrameTime = 0;
+          drawIdleVisualizer();
+        };
+
+        const renderVisualizer = () => {
+          if (!isListening.value || !canvasEl.value) return;
+
+          const canvas = canvasEl.value;
+          const ctx = canvas.getContext('2d');
+          const width = canvas.width = canvas.offsetWidth;
+          const height = canvas.height = canvas.offsetHeight;
+
+          const bufferLength = micAnalyser.frequencyBinCount;
+          const freqData = new Uint8Array(bufferLength);
+          micAnalyser.getByteFrequencyData(freqData);
+
+          const sampleRate = micAudioCtx.sampleRate;
+          const binSize = sampleRate / micAnalyser.fftSize;
+
+          const maxDisplayFreq = 15000;
+          const maxDisplayBin = Math.min(bufferLength, Math.floor(maxDisplayFreq / binSize));
+
+          const currentStyle = currentColorStyle.value;
+
+          ctx.fillStyle = '#020617';
+          ctx.fillRect(0, 0, width, height);
+
+          const startX = (minFreq.value / maxDisplayFreq) * width;
+          const endX = (maxFreq.value / maxDisplayFreq) * width;
+
+          ctx.fillStyle = currentStyle.bandBg;
+          ctx.fillRect(startX, 0, endX - startX, height);
+          ctx.strokeStyle = currentStyle.bandBorder;
+          ctx.strokeRect(startX, 0, endX - startX, height);
+
+          const barWidth = width / maxDisplayBin;
+          let inBandSum = 0;
+          let inBandCount = 0;
+
+          for (let i = 0; i < maxDisplayBin; i++) {
+            const freq = i * binSize;
+            const val = freqData[i];
+            const barHeight = (val / 255) * height;
+            const x = i * barWidth;
+            const y = height - barHeight;
+
+            const isInBand = freq >= minFreq.value && freq <= maxFreq.value;
+            if (isInBand) {
+              inBandSum += val;
+              inBandCount++;
+              const ratio = val / 255;
+              const freqNorm = (freq - minFreq.value) / Math.max(1, (maxFreq.value - minFreq.value));
+              ctx.shadowColor = currentStyle.accentColor;
+              ctx.shadowBlur = 10;
+              ctx.fillStyle = currentStyle.getBarFill(ctx, x, y, barWidth, height, barHeight, ratio, freqNorm);
+            } else {
+              ctx.shadowBlur = 0;
+              ctx.fillStyle = currentStyle.outOfBand;
+            }
+
+            ctx.fillRect(x, y, Math.max(1, barWidth - 1), barHeight);
+          }
+          ctx.shadowBlur = 0;
+
+          const avgInBandVal = inBandCount > 0 ? (inBandSum / inBandCount) : 0;
+          const currentEnergy = (avgInBandVal / 255) * 100;
+          inBandEnergy.value = currentEnergy;
+
+          const now = performance.now();
+          const dt = lastFrameTime > 0 ? Math.min(100, now - lastFrameTime) : 16;
+          lastFrameTime = now;
+
+          // Asymmetric tracking of baseline noise floor
+          if (currentEnergy < noiseFloor) {
+            noiseFloor = noiseFloor * 0.85 + currentEnergy * 0.15;
+          } else {
+            noiseFloor = noiseFloor * 0.995 + currentEnergy * 0.005;
+          }
+
+          // Track continuous elevated energy in noise zone
+          // If energy stays continuously high (>= 90% of threshold) without quiet valleys
+          if (currentEnergy >= triggerThreshold.value * 0.9) {
+            highEnergyDurationMs += dt;
+          } else if (currentEnergy < triggerThreshold.value * 0.65) {
+            // Distinct quiet valley between beats -> rapidly decay noise duration
+            highEnergyDurationMs = Math.max(0, highEnergyDurationMs - dt * 4);
+          }
+
+          // Track near-miss transient peaks (rises above noise floor but falls short of threshold)
+          if (currentEnergy > prevEnergy && currentEnergy > noiseFloor + 5) {
+            isRising = true;
+            peakCandidate = Math.max(peakCandidate, currentEnergy);
+          } else if (isRising && currentEnergy < prevEnergy) {
+            isRising = false;
+            if (peakCandidate < triggerThreshold.value && peakCandidate >= triggerThreshold.value * 0.55 && peakCandidate > noiseFloor + 6) {
+              recentNearMisses.push({ time: now, val: peakCandidate });
+            }
+            peakCandidate = 0;
+          }
+          prevEnergy = currentEnergy;
+
+          // Retain near-miss peaks from the last 3.5 seconds
+          recentNearMisses = recentNearMisses.filter(m => now - m.time < 3500);
+
+          const minIntervalMs = 60000 / maxBpmLock.value;
+          const maxIntervalMs = 60000 / minBpmLock.value;
+
+          if (lastBeatTime > 0 && (now - lastBeatTime) > (maxIntervalMs * 1.5)) {
+            tapTimestamps.length = 0;
+          }
+
+          if (currentEnergy >= triggerThreshold.value && (now - lastBeatTime) > minIntervalMs) {
+            const hitRatio = currentEnergy / triggerThreshold.value;
+            lastHitRatio.value = hitRatio;
+
+            lastBeatTime = now;
+            tapTimestamps.push(now);
+            recentBeats.push({ time: now, ratio: hitRatio, energy: currentEnergy });
+            recentBeats = recentBeats.filter(b => now - b.time < 4000);
+
+            isBeatActive.value = true;
+            setTimeout(() => { isBeatActive.value = false; }, 60);
+
+            if (tapTimestamps.length > 8) tapTimestamps.shift();
+            if (tapTimestamps.length >= 3) applyTappedTempo();
+          }
+
+          // Periodically evaluate if mic threshold should be adjusted
+          if (now - lastEvalTime > 200) {
+            lastEvalTime = now;
+            if (now - thresholdLastAdjustTime > 2000) {
+              // 1. Condition: Noise Level Too High
+              // If ambient noise floor is near/above threshold, or sustained elevated noise persists >= 1.2s
+              const isNoiseTooHigh = (noiseFloor >= triggerThreshold.value * 0.78) || (highEnergyDurationMs >= 1400 && tapTimestamps.length < 2);
+
+              if (isNoiseTooHigh) {
+                const targetVal = Math.min(80, Math.max(triggerThreshold.value + 5, Math.ceil(noiseFloor * 1.35 + 6)));
+                thresholdNotice.value = {
+                  type: 'too_low',
+                  icon: '⚠️',
+                  message: `Noise level is too high (${Math.round(noiseFloor)}% baseline). Increase threshold to prevent false triggers.`,
+                  suggestedVal: targetVal,
+                  boxClass: 'bg-amber-950/50 border-amber-600/60 shadow-[0_0_12px_rgba(245,158,11,0.25)]',
+                  textClass: 'text-amber-200 font-medium',
+                  btnClass: 'bg-amber-600 hover:bg-amber-500 text-white font-bold'
+                };
+              }
+              // 2. Condition: Threshold Too High (Taps can't reach it)
+              else if (recentNearMisses.length >= 3 && (now - lastBeatTime > 2500)) {
+                const maxRecentMiss = Math.max(...recentNearMisses.map(m => m.val));
+                const targetVal = Math.max(8, Math.min(triggerThreshold.value - 3, Math.round(maxRecentMiss * 0.88)));
+                thresholdNotice.value = {
+                  type: 'too_high',
+                  icon: 'ℹ️',
+                  message: `Taps peaking around ${Math.round(maxRecentMiss)}% (below ${triggerThreshold.value}%). Lower threshold to register hits.`,
+                  suggestedVal: targetVal,
+                  boxClass: 'bg-sky-950/40 border-sky-600/50',
+                  textClass: 'text-sky-200',
+                  btnClass: 'bg-sky-600 hover:bg-sky-500 text-white'
+                };
+              }
+              // 3. Normal / clean operation
+              else if (thresholdNotice.value?.type !== 'calibrated') {
+                thresholdNotice.value = null;
+              }
+            }
+          }
+
+          animFrame = requestAnimationFrame(renderVisualizer);
+        };
+
+        const applyTappedTempo = () => {
+          const intervals = [];
+          for (let i = 1; i < tapTimestamps.length; i++) {
+            intervals.push(tapTimestamps[i] - tapTimestamps[i - 1]);
+          }
+
+          intervals.sort((a, b) => a - b);
+          const medianInterval = intervals[Math.floor(intervals.length / 2)];
+
+          if (medianInterval > 0) {
+            const calculated = Math.round(60000 / medianInterval);
+            if (calculated >= minBpmLock.value && calculated <= maxBpmLock.value) {
+              targetBpm.value = calculated;
+              updatePlaybackRate();
+            }
+          }
+        };
+
+        return {
+          discFlashing,
+          audioLoaded,
+          analyzing,
+          isPlaying,
+          baseBpm,
+          targetBpm,
+          playbackRate,
+          currentTime,
+          duration,
+          canvasEl,
+          isListening,
+          isBeatActive,
+          inBandEnergy,
+          minFreq,
+          maxFreq,
+          triggerThreshold,
+          minBpmLock,
+          maxBpmLock,
+          hitQuality,
+          selectedHue,
+          onHueChange,
+          drawIdleVisualizer,
+          handleFileUpload,
+          halveBpm,
+          doubleBpm,
+          resetToOriginal,
+          updatePlaybackRate,
+          isDemoActive,
+          toggleDemoTrack,
+          onDiscClick,
+          togglePlay,
+          onSeek,
+          formatTime,
+          toggleMic,
+          onFreqRangeChange,
+          thresholdNotice,
+          onThresholdManualChange,
+          applySuggestedThreshold
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+
+</html>
