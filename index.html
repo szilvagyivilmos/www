@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en" class="dark scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Vilmos Szilvágyi | Hub</title>
+
+  <!-- Typography: Inter & Space Grotesk for the cyber/synth vibe -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Vue 3 CDN (Modular reactive state) -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+
+  <style>
+    :root {
+      --bg-base: #06080e;
+      --card-bg: rgba(13, 18, 30, 0.7);
+      --card-border: rgba(255, 255, 255, 0.08);
+    }
+
+    body {
+      background-color: var(--bg-base);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      color: #e2e8f0;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+      perspective: 1200px;
+    }
+
+    /* Ambient cyber-synth grid and radial glows */
+    .bg-cyber-glow {
+      background-image: 
+        radial-gradient(circle at 50% 20%, rgba(0, 240, 255, 0.08) 0%, transparent 60%),
+        radial-gradient(circle at 80% 80%, rgba(168, 85, 247, 0.08) 0%, transparent 60%),
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 48px 48px, 48px 48px;
+      background-attachment: fixed;
+    }
+
+    /* Minimal Modular Hub Tile */
+    .hub-tile {
+      position: relative;
+      background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 30px;
+      border: 1px solid var(--tile-border, rgba(255, 255, 255, 0.08));
+      box-shadow: 
+        0 10px 30px -10px rgba(0, 0, 0, 0.7),
+        0 0 25px -5px var(--tile-glow, rgba(0, 240, 255, 0.15)),
+        inset 0 0 20px -5px var(--tile-glow, rgba(0, 240, 255, 0.08));
+      transform-style: preserve-3d;
+      will-change: transform;
+      transition: border-color 0.35s ease, box-shadow 0.35s ease, transform 0.15s ease-out;
+      text-decoration: none;
+      user-select: none;
+      touch-action: manipulation;
+    }
+
+    /* Interactive Specular Spotlight Aura */
+    .hub-tile::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: radial-gradient(
+        350px circle at var(--spot-x, 50%) var(--spot-y, 50%),
+        var(--tile-spot, rgba(0, 240, 255, 0.18)),
+        transparent 70%
+      );
+      opacity: 0.6;
+      transition: opacity 0.4s ease;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .hub-tile:hover {
+      border-color: var(--tile-neon, #00f0ff);
+      box-shadow: 
+        0 20px 45px -10px rgba(0, 0, 0, 0.8),
+        0 0 40px 0px var(--tile-glow-active, rgba(0, 240, 255, 0.35)),
+        inset 0 0 30px -5px var(--tile-glow-active, rgba(0, 240, 255, 0.2));
+    }
+
+    .hub-tile:hover::before {
+      opacity: 1;
+    }
+
+    .hub-tile:active {
+      transform: scale(0.975) !important;
+    }
+
+    /* 3D elevation layer for text */
+    .tile-layer-3d {
+      position: relative;
+      z-index: 3;
+      transform: translateZ(30px);
+    }
+
+    .neon-title {
+      font-family: 'Space Grotesk', sans-serif;
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #06080e;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+
+<body class="bg-cyber-glow flex flex-col justify-between min-h-screen">
+
+  <div id="app" class="flex flex-col justify-between min-h-screen">
+
+    <!-- Mobile Gyroscope Activation Banner (iOS requirement) -->
+    <aside 
+      v-if="showGyroPrompt" 
+      class="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-slate-900/90 backdrop-blur-md border border-cyan-400/30 px-5 py-2.5 rounded-full text-xs text-slate-200 shadow-2xl flex items-center gap-3 animate-pulse"
+    >
+      <span class="flex h-2 w-2 relative">
+        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+        <span class="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+      </span>
+      <span>Enable device tilt motion?</span>
+      <button 
+        @click="requestGyroPermission" 
+        class="bg-cyan-400 text-slate-950 font-bold px-3 py-1 rounded-full text-xs hover:bg-cyan-300 transition-colors shadow"
+      >
+        Enable
+      </button>
+    </aside>
+
+    <!-- Main Content Container -->
+    <main class="w-full max-w-6xl mx-auto px-6 py-12 sm:py-16 my-auto">
+      
+      <!-- Responsive 3-Column Grid matching the mockup -->
+      <div 
+        ref="gridRef" 
+        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 place-items-stretch"
+      >
+        <!-- Single Clean Tile: Link -> Title -> Description ONLY -->
+        <a 
+          v-for="project in projects" 
+          :key="project.title"
+          :href="project.url"
+          class="hub-tile group p-8 sm:p-9 flex flex-col justify-center min-h-[220px] sm:min-h-[260px]"
+          :style="computeTileTheme(project)"
+          :aria-label="project.title + ' Project'"
+        >
+          <div class="tile-layer-3d">
+            <h2 
+              class="neon-title text-3xl sm:text-4xl font-extrabold tracking-tight transition-all duration-300"
+              :style="{ textShadow: project.neonShadow, color: '#ffffff' }"
+            >
+              {{ project.title }}
+            </h2>
+            <p class="text-sm sm:text-base text-slate-300/80 mt-3 font-normal leading-relaxed">
+              {{ project.description }}
+            </p>
+          </div>
+        </a>
+      </div>
+
+    </main>
+
+  </div>
+
+  <script>
+    const { createApp, ref, onMounted } = Vue;
+
+    createApp({
+      setup() {
+        const gridRef = ref(null);
+        const showGyroPrompt = ref(false);
+
+        // -------------------------------------------------------------
+        // Modular Project Catalog (BeatR synth-inspired neon palettes)
+        // -------------------------------------------------------------
+        const projects = ref([
+          {
+            title: 'BeatR',
+            url: 'https://szilvagyivilmos.github.io/www/BeatR/',
+            description: 'Rhythm synthesis, audio visualization, and interactive sound engine.',
+            neonColor: '#00f0ff',
+            neonShadow: '0 0 10px rgba(0, 240, 255, 0.7), 0 0 25px rgba(0, 240, 255, 0.35)',
+            glowRgba: 'rgba(0, 240, 255, 0.2)'
+          },
+          {
+            title: 'iCoin',
+            url: 'https://szilvagyivilmos.github.io/www/iCoin/',
+            description: 'Cryptocurrency market tracker, telemetry analytics, and portfolio metrics.',
+            neonColor: '#a855f7',
+            neonShadow: '0 0 10px rgba(168, 85, 247, 0.7), 0 0 25px rgba(168, 85, 247, 0.35)',
+            glowRgba: 'rgba(168, 85, 247, 0.2)'
+          },
+          {
+            title: 'altMap',
+            url: 'https://szilvagyivilmos.github.io/www/altMap/',
+            description: 'Geospatial visualization platform, route overlays, and custom map styling.',
+            neonColor: '#10b981',
+            neonShadow: '0 0 10px rgba(16, 185, 129, 0.7), 0 0 25px rgba(16, 185, 129, 0.35)',
+            glowRgba: 'rgba(16, 185, 129, 0.2)'
+          },
+          {
+            title: 'ToDo3',
+            url: 'https://szilvagyivilmos.github.io/www/todo3/',
+            description: 'toBeDoBeDo Under construction...',
+            neonColor: 'gold',
+            neonShadow: '0 0 10px rgba(255,215,0,0.7), 0 0 25px rgba(255, 215, 0, 0.35)',
+            glowRgba: 'rgba(255, 215, 0, 0.2)'
+          },
+          
+        ]);
+
+        // Dynamic CSS variables per tile for clean neon theme scoping
+        const computeTileTheme = (project) => ({
+          '--tile-neon': project.neonColor,
+          '--tile-glow': project.glowRgba,
+          '--tile-glow-active': project.glowRgba.replace('0.2', '0.45'),
+          '--tile-spot': project.glowRgba.replace('0.2', '0.15'),
+          '--tile-border': 'rgba(255, 255, 255, 0.08)'
+        });
+
+        // -------------------------------------------------------------
+        // Motion Engine: Mobile Gyroscope + Desktop Tilt + Momentum
+        // -------------------------------------------------------------
+        let targetRotX = 0;
+        let targetRotY = 0;
+        let currentRotX = 0;
+        let currentRotY = 0;
+
+        let lastScrollY = window.scrollY;
+        let scrollTilt = 0;
+        let targetScrollTilt = 0;
+
+        const isTouchDevice = () => 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+        const handleOrientation = (e) => {
+          let gamma = e.gamma || 0; // Left/Right tilt [-90, 90]
+          let beta = e.beta || 0;   // Front/Back tilt [-180, 180]
+
+          gamma = Math.max(-40, Math.min(40, gamma));
+          const naturalBeta = beta - 45; // 45° is natural reading angle
+          const clampedBeta = Math.max(-40, Math.min(40, naturalBeta));
+
+          targetRotY = (gamma / 40) * 14;
+          targetRotX = -(clampedBeta / 40) * 14;
+
+          const spotX = ((gamma + 40) / 80) * 100;
+          const spotY = ((clampedBeta + 40) / 80) * 100;
+
+          document.querySelectorAll('.hub-tile').forEach((tile) => {
+            tile.style.setProperty('--spot-x', `${spotX}%`);
+            tile.style.setProperty('--spot-y', `${spotY}%`);
+          });
+        };
+
+        const requestGyroPermission = async () => {
+          if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            try {
+              const res = await DeviceOrientationEvent.requestPermission();
+              if (res === 'granted') {
+                window.addEventListener('deviceorientation', handleOrientation, true);
+              }
+            } catch (err) {
+              console.error(err);
+            }
+          }
+          showGyroPrompt.value = false;
+        };
+
+        onMounted(() => {
+          const isTouch = isTouchDevice();
+
+          if (!isTouch) {
+            // Desktop Cursor Perspective
+            window.addEventListener('mousemove', (e) => {
+              const nx = (e.clientX - window.innerWidth / 2) / (window.innerWidth / 2);
+              const ny = (e.clientY - window.innerHeight / 2) / (window.innerHeight / 2);
+
+              targetRotY = nx * 10;
+              targetRotX = -ny * 10;
+
+              document.querySelectorAll('.hub-tile').forEach((tile) => {
+                const rect = tile.getBoundingClientRect();
+                tile.style.setProperty('--spot-x', `${e.clientX - rect.left}px`);
+                tile.style.setProperty('--spot-y', `${e.clientY - rect.top}px`);
+              });
+            });
+
+            document.addEventListener('mouseleave', () => {
+              targetRotX = 0;
+              targetRotY = 0;
+            });
+          } else {
+            // Check iOS DeviceOrientation Permission
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+              showGyroPrompt.value = true;
+            } else if (window.DeviceOrientationEvent) {
+              window.addEventListener('deviceorientation', handleOrientation, true);
+            }
+          }
+
+          // Scroll momentum physics
+          window.addEventListener('scroll', () => {
+            const currentY = window.scrollY;
+            const delta = currentY - lastScrollY;
+            lastScrollY = currentY;
+            targetScrollTilt = Math.max(-8, Math.min(8, delta * 0.3));
+          }, { passive: true });
+
+          // Smooth animation frame lerp loop
+          const renderPhysics = () => {
+            currentRotX += (targetRotX - currentRotX) * 0.08;
+            currentRotY += (targetRotY - currentRotY) * 0.08;
+
+            targetScrollTilt *= 0.88;
+            scrollTilt += (targetScrollTilt - scrollTilt) * 0.12;
+
+            const finalX = currentRotX + scrollTilt;
+            const finalY = currentRotY;
+
+            document.querySelectorAll('.hub-tile').forEach((tile) => {
+              tile.style.transform = `perspective(1000px) rotateX(${finalX.toFixed(2)}deg) rotateY(${finalY.toFixed(2)}deg)`;
+            });
+
+            requestAnimationFrame(renderPhysics);
+          };
+
+          requestAnimationFrame(renderPhysics);
+        });
+
+        return {
+          projects,
+          computeTileTheme,
+          gridRef,
+          showGyroPrompt,
+          requestGyroPermission
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
